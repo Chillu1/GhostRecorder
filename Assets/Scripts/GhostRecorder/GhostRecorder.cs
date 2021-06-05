@@ -1,105 +1,85 @@
 ﻿using System;
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 
-public class GhostRecorder : MonoBehaviour
-{
-    private GhostShot[] frames;
 
-    private bool isRecording;
-
-    private int recordIndex = 0;
-    private float recordTime = 0.0f;            // in milliseconds
-
-    #region Event Handlers
-    public event EventHandler RecordingStarted;
-    public event EventHandler RecordingEnded;
-    #endregion
-
-    #region Event Invokers
-    protected virtual void OnRecordingStart()
+    public class GhostRecorder : MonoBehaviour
     {
-        if (RecordingStarted != null)
+        public GhostSnapshot[] Snapshots { get; private set; }
+
+        private bool _isRecording;
+
+        private int _recordIndex;
+        private float _recordTime; // in milliseconds
+
+        private Transform _playerTransform;
+        //private Transform _playerAimTransform;
+
+        public event EventHandler RecordingStarted;
+        public event EventHandler RecordingEnded;
+
+        protected virtual void OnRecordingStart()
         {
-            RecordingStarted.Invoke(this, EventArgs.Empty);
+            RecordingStarted?.Invoke(this, EventArgs.Empty);
         }
-    }
 
-    protected virtual void OnRecordingEnd()
-    {
-        if (RecordingEnded != null)
+        protected virtual void OnRecordingEnd()
         {
-            RecordingEnded.Invoke(this, EventArgs.Empty);
+            RecordingEnded?.Invoke(this, EventArgs.Empty);
         }
-    }
-    #endregion
 
-    public void StartRecording(float duration)
-    {
-        if (!IsRecording())
+        public void StartRecording(float duration)
         {
-            frames = new GhostShot[(int)(60 * duration)];
-            recordIndex = 0;
-            recordTime = Time.time * 1000;
-
-            isRecording = true;
-            OnRecordingStart();
-
-            Debug.LogFormat("Recording of {0} started", gameObject.name);
-        }
-    }
-
-    public void StopRecording()
-    {
-        if (IsRecording())
-        {
-            frames[recordIndex - 1].isFinal = true;
-
-            isRecording = false;
-            OnRecordingEnd();
-
-            Debug.LogFormat("Recording of {0} ended at frame {1}", gameObject.name, recordIndex);
-        }
-    }
-
-    void Update()
-    {
-        if (IsRecording())
-        {
-            RecordFrame();
-        }
-    }
-
-    private void RecordFrame()
-    {
-        if (recordIndex < frames.Length)
-        {
-            recordTime += Time.smoothDeltaTime * 1000;
-            GhostShot newFrame = new GhostShot()
+            //RecordingEnded += delegate(object sender, EventArgs args) { FindObjectOfType<GhostSystem>().StartReplay(); };
+            _playerTransform = transform;
+            //_playerAimTransform = GetComponentInChildren<PlayerAiming>().transform;
+            if (!_isRecording)
             {
-                timeMark = recordTime,
-                posMark = transform.position,
-                rotMark = transform.rotation
-            };
+                Snapshots = new GhostSnapshot[(int) (60 * duration)];
+                _recordIndex = 0;
+                _recordTime = Time.time * 1000;
 
-            frames[recordIndex] = newFrame;
+                _isRecording = true;
+                OnRecordingStart();
 
-            recordIndex++;
+                Debug.LogFormat("Recording of {0} started", gameObject.name);
+            }
         }
-        else
+
+        public void StopRecording()
         {
-            StopRecording();
+            if (_isRecording)
+            {
+                Snapshots[_recordIndex - 1].SetLastSnapshot();
+
+                _isRecording = false;
+                OnRecordingEnd();
+
+                Debug.LogFormat("Recording of {0} ended at frame {1}", gameObject.name, _recordIndex);
+            }
+        }
+
+        private void FixedUpdate()
+        {
+            if (_isRecording)
+            {
+                RecordFrame(Time.deltaTime);
+            }
+        }
+
+        private void RecordFrame(float deltaTime)
+        {
+            if (_recordIndex < Snapshots.Length)
+            {
+                _recordTime += deltaTime * 1000;
+                GhostSnapshot snapshot = new GhostSnapshot(_recordTime, _playerTransform.position, _playerTransform.rotation);
+
+                Snapshots[_recordIndex] = snapshot;
+
+                _recordIndex++;
+            }
+            else
+            {
+                StopRecording();
+            }
         }
     }
-
-    public bool IsRecording()
-    {
-        return isRecording;
-    }
-
-    public GhostShot[] GetFrames()
-    {
-        return frames;
-    }
-}
